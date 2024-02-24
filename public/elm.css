@@ -13,3 +13,17 @@ html, body {
   align-items: center;
   flex-direction: column;
 }
+
+#star-chart thead {
+  display: block;
+}
+
+#star-chart tbody {
+  display: block;
+  height: 80px;
+  overflow-y: scroll;
+}
+
+#star-chart th, td {
+  width: 100px;
+}
