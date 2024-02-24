@@ -7,11 +7,12 @@ html, body {
 }
 
 .contents {
-  height: 100%;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  align-items: left;
   flex-direction: column;
+  width: 800px;
+  padding-top: 30px;
+  margin: 0 auto;
 }
 
 #star-chart thead {

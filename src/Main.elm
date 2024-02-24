@@ -30,6 +30,7 @@ type alias Model =
   { source : String
   , stars : Stars
   , sight : Sight
+  , pointedIdx : Maybe Int
   , mouse : MouseState
   }
 
@@ -71,6 +72,7 @@ init =
     , xAxisIdx = 0
     , yAxisIdx = 1
     }
+  , pointedIdx = Nothing
   , mouse =
     { x = 0
     , y = 0
@@ -89,6 +91,7 @@ init =
 type Msg
   = MouseMoved MouseState
   | WheelMoved Float
+  | StarPointed (Maybe Int)
   | XAxisSelected Int
   | YAxisSelected Int
   | SourceChanged String
@@ -118,6 +121,9 @@ update msg model =
         sight_ = { sight | xPerPx = xPerPx, yPerPx = yPerPx }
       in
         { model | sight = sight_ }
+
+    StarPointed idx ->
+      { model | pointedIdx = idx }
 
     XAxisSelected idx ->
       let
@@ -165,12 +171,14 @@ color =
   , text = "#272727"
   , star = "#4C72B0"
   , corona = "#F6F6F8"
+  , pointed = "#FFFF00"
   }
 
 view : Model -> Html Msg
 view model =
   div [ HAttr.class "contents" ]
-    [ skyView model.mouse model.sight model.stars
+    [ skyView model.mouse model.sight model.pointedIdx model.stars
+    , starDetailView model.stars model.pointedIdx
     , axisSelectorView model.sight model.stars.header
     , starChartView model.sight model.stars
     , div [ HAttr.id "source"]
@@ -182,8 +190,8 @@ view model =
       ]
     ]
 
-skyView : MouseState -> Sight -> Stars -> Html Msg
-skyView mouse sight stars =
+skyView : MouseState -> Sight -> Maybe Int -> Stars -> Html Msg
+skyView mouse sight pointed stars =
   let
     bg =
       Svg.rect
@@ -248,7 +256,7 @@ skyView mouse sight stars =
               ]
               [ Svg.text <| h ])
 
-    stars_ = starsView sight stars.data
+    stars_ = starsView sight pointed stars.data
   in
     [ bg, xScales, yScales, stars_ ]
       |> insertIfExist xHeader
@@ -261,6 +269,11 @@ skyView mouse sight stars =
         , SAttr.width <| String.fromInt <| sight.width + scaleRoom
         , SAttr.height <| String.fromInt <| sight.height + scaleRoom
         , onWheelMove WheelMoved
+        ]
+      |> List.singleton
+      |> div
+        [ SAttr.width <| String.fromInt <| sight.width + scaleRoom
+        , SAttr.height <| String.fromInt <| sight.height + scaleRoom
         ]
 
 xScalesView : Float -> Sight -> Svg msg
@@ -342,40 +355,69 @@ yScaleView sight locale f yOnGraph =
   in
     Svg.g [] [ line, text ]
 
-starsView : Sight -> List Star -> Svg msg
-starsView sight stars =
+starsView : Sight -> Maybe Int -> List Star -> Svg Msg
+starsView sight pointed stars =
   let
-    f = graphToSky sight
+    isInSky { x, y } =
+      scaleRoom <= x && x <= toFloat (scaleRoom + sight.width)
+        && 0 <= y && y <= toFloat sight.height
   in
     stars
-      |> List.filterMap (\star ->
-        Maybe.map2 Point2D (getAsFloat sight.xAxisIdx star) (getAsFloat sight.yAxisIdx star)
-          |> Maybe.andThen (starView sight f))
+      |> List.indexedMap (\idx star ->
+        Maybe.map2 (\x y ->
+          (idx, Point2D x y |> graphToSky sight))
+          (getAsFloat sight.xAxisIdx star)
+          (getAsFloat sight.yAxisIdx star))
+      |> List.filterMap identity
+      |> List.filter(\( _, p ) -> isInSky p)
+      |> List.map (\( idx, p ) -> starView pointed idx p)
       |> Svg.g []
 
-starView : Sight -> (Point2D -> Point2D) -> Point2D -> Maybe (Svg msg)
-starView sight f onGraph =
-  let
-    { x, y } = f onGraph
-    circle =
-      Svg.circle
-        [ SAttr.cx <| String.fromFloat x
-        , SAttr.cy <| String.fromFloat y
-        , SAttr.r "5"
-        , SAttr.fill color.star
-        , SAttr.stroke color.corona
-        ] []
-  in
-    if scaleRoom <= x && x <= toFloat (scaleRoom + sight.width)
-      && 0 <= y && y <= toFloat sight.height
-    then Just circle
-    else Nothing
+starView : Maybe Int -> Int -> Point2D -> Svg Msg
+starView pointed idx { x, y } =
+  Svg.circle
+    [ SAttr.cx <| String.fromFloat x
+    , SAttr.cy <| String.fromFloat y
+    , SAttr.r "5"
+    , SAttr.fill color.star
+    , SAttr.stroke <| if pointed == Just idx then color.pointed else color.corona
+    , SAttr.strokeWidth <| if pointed == Just idx then "2" else "1"
+    , onClick (StarPointed (Just idx))
+    ] []
 
 graphToSky : Sight -> Point2D -> Point2D
 graphToSky { origin, xPerPx, yPerPx, width, height } { x, y } =
   { x = (x - origin.x) / xPerPx + scaleRoom
   , y = toFloat height + (origin.y - y) / yPerPx
   }
+
+starDetailView : Stars -> Maybe Int -> Html msg
+starDetailView { header, data } maybeIdx =
+  let
+    content =
+      case maybeIdx |> Maybe.andThen (\idx -> get idx data) of
+        Nothing -> Html.text "no data"
+        Just star ->
+          let
+            hd =
+              header
+                |> List.map (Html.text >> List.singleton >> th [])
+                |> tr []
+                |> List.singleton
+                |> thead []
+
+            bd =
+              star
+                |> List.map (\e -> td [] [ Html.text e ])
+                |> tr []
+                |> List.singleton
+                |> tbody []
+          in
+            table [] [ hd, bd ]
+  in
+    div
+      [ HAttr.id "star-selected" ]
+      [ h2 "Selected", content ]
 
 axisSelectorView : Sight -> List String -> Html Msg
 axisSelectorView sight header =
@@ -415,7 +457,7 @@ axisSelectorView sight header =
           , HAttr.value <| String.fromInt sight.yAxisIdx
           ]
   in
-    div [] [ xlabel, xSelector, ylabel, ySelector ]
+    div [] [ h2 "Axis", xlabel, xSelector, ylabel, ySelector ]
 
 starChartView : Sight -> Stars -> Html msg
 starChartView sight { header, data } =
@@ -448,7 +490,11 @@ starChartView sight { header, data } =
       , HAttr.width sight.width
       , HAttr.height 40
       ]
-      [ tbl ]
+      [ h2 "Table", tbl ]
+
+h2 : String -> Html msg
+h2 str =
+  Html.h2 [] [ Html.text str ]
 
 
 
