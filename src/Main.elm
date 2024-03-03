@@ -90,12 +90,16 @@ init =
 
 type Msg
   = MouseMoved MouseState
-  | WheelMoved Float
+  | WheelMoved (Maybe Axis) Float
   | StarPointed (Maybe Int)
   | XAxisSelected Int
   | YAxisSelected Int
   | SourceChanged String
   | ParseRequested
+
+type Axis
+  = X
+  | Y
 
 update : Msg -> Model -> Model
 update msg model =
@@ -113,11 +117,23 @@ update msg model =
         _ ->
           { model | mouse = mouse }
 
-    WheelMoved wheel ->
+    WheelMoved axis wheel ->
       let
         sight = model.sight
-        xPerPx = sight.xPerPx * (1 + wheel * (0.001))
-        yPerPx = sight.xPerPx * (1 + wheel * (0.001))
+        ( xPerPx, yPerPx ) =
+          case axis of
+            Nothing ->
+              ( sight.xPerPx * (1 + wheel * (0.001))
+              , sight.yPerPx * (1 + wheel * (0.001))
+              )
+            Just X ->
+              ( sight.xPerPx * (1 + wheel * (0.001))
+              , sight.yPerPx
+              )
+            Just Y ->
+              ( sight.xPerPx
+              , sight.yPerPx * (1 + wheel * (0.001))
+              )
         sight_ = { sight | xPerPx = xPerPx, yPerPx = yPerPx }
       in
         { model | sight = sight_ }
@@ -256,9 +272,29 @@ skyView mouse sight pointed stars =
               ]
               [ Svg.text <| h ])
 
+    xWheelArea =
+      Svg.rect
+        [ SAttr.x <| String.fromInt scaleRoom
+        , SAttr.y <| String.fromInt sight.height
+        , SAttr.width <| String.fromInt sight.width
+        , SAttr.height <| String.fromInt scaleRoom
+        , SAttr.fill "transparent"
+        , onWheelMove <| WheelMoved (Just X)
+        ] []
+
+    yWheelArea =
+      Svg.rect
+        [ SAttr.x "0"
+        , SAttr.y "0"
+        , SAttr.width <| String.fromInt scaleRoom
+        , SAttr.height <| String.fromInt sight.height
+        , SAttr.fill "transparent"
+        , onWheelMove <| WheelMoved (Just Y)
+        ] []
+
     stars_ = starsView sight pointed stars.data
   in
-    [ bg, xScales, yScales, stars_ ]
+    [ bg, xScales, yScales, stars_, xWheelArea, yWheelArea ]
       |> insertIfExist xHeader
       |> insertIfExist yHeader
       |> Svg.svg
@@ -268,7 +304,7 @@ skyView mouse sight pointed stars =
             ++ String.fromInt (sight.height + scaleRoom)
         , SAttr.width <| String.fromInt <| sight.width + scaleRoom
         , SAttr.height <| String.fromInt <| sight.height + scaleRoom
-        , onWheelMove WheelMoved
+        , onWheelMove <| WheelMoved Nothing
         ]
       |> List.singleton
       |> div
