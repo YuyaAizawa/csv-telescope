@@ -1,8 +1,8 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, div, select, option, label, textarea, button, table, thead, tbody, tr, th, td)
-import Html.Attributes as HAttr
+import Html exposing (Html, div, select, option, label, textarea, button, table, thead, tbody, tr, th, td, ul, li, text)
+import Html.Attributes as HAttr exposing (id, class)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as Json
 import Svg exposing (Svg, svg)
@@ -32,6 +32,7 @@ type alias Model =
   , sight : Sight
   , pointedIdx : Maybe Int
   , mouse : MouseState
+  , tab : Tab
   }
 
 type alias Stars =
@@ -80,6 +81,7 @@ init =
     , dy = 0
     , down = Other
     }
+  , tab = TabCsv
   }
 
 
@@ -96,6 +98,7 @@ type Msg
   | YAxisSelected Int
   | SourceChanged String
   | ParseRequested
+  | TabChanged Tab
 
 type Axis
   = X
@@ -161,6 +164,9 @@ update msg model =
     ParseRequested ->
       { model | stars = parseCsv model.source }
 
+    TabChanged tab ->
+      { model | tab = tab }
+
 
 parseCsv : String -> Stars
 parseCsv source =
@@ -190,21 +196,50 @@ color =
   , pointed = "#FFFF00"
   }
 
+type Tab
+  = TabSelected
+  | TabAxis
+  | TabTable
+  | TabCsv
+
 view : Model -> Html Msg
 view model =
-  div [ HAttr.class "contents" ]
-    [ skyView model.mouse model.sight model.pointedIdx model.stars
-    , starDetailView model.stars model.pointedIdx
-    , axisSelectorView model.sight model.stars.header
-    , starChartView model.sight model.stars
-    , div [ HAttr.id "source"]
-      [ button [ onClick ParseRequested ] [ Html.text "parse" ]
-      , textarea
-        [ HAttr.value model.source
-        , onInput SourceChanged
-        ] []
+  let
+    tabItem name tab =
+      li
+        [ class <| "tabs-item" ++ if model.tab == tab then " active" else ""
+        , onClick <| TabChanged tab
+        ]
+        [ text name ]
+  in
+    div [ class "contents" ]
+      [ skyView model.mouse model.sight model.pointedIdx model.stars
+      , div [ class "controls" ]
+          [ ul [ class "tabs" ]
+            [ tabItem "Selected" TabSelected
+            , tabItem "Axis" TabAxis
+            , tabItem "Table" TabTable
+            , tabItem "Csv" TabCsv
+            ]
+          , div [ class "tab-content" ]
+            [ case model.tab of
+                TabSelected ->
+                  starDetailView model.stars model.pointedIdx
+                TabAxis ->
+                  axisSelectorView model.sight model.stars.header
+                TabTable ->
+                  starChartView model.sight model.stars
+                TabCsv ->
+                  div [ HAttr.id "source" ]
+                    [ button [ onClick ParseRequested ] [ Html.text "parse" ]
+                    , textarea
+                      [ HAttr.value model.source
+                      , onInput SourceChanged
+                      ] []
+                    ]
+            ]
+          ]
       ]
-    ]
 
 skyView : MouseState -> Sight -> Maybe Int -> Stars -> Html Msg
 skyView mouse sight pointed stars =
@@ -452,8 +487,8 @@ starDetailView { header, data } maybeIdx =
             table [] [ hd, bd ]
   in
     div
-      [ HAttr.id "star-selected" ]
-      [ h2 "Selected", content ]
+      [ id "star-selected" ]
+      [ content ]
 
 axisSelectorView : Sight -> List String -> Html Msg
 axisSelectorView sight header =
@@ -493,7 +528,7 @@ axisSelectorView sight header =
           , HAttr.value <| String.fromInt sight.yAxisIdx
           ]
   in
-    div [] [ h2 "Axis", xlabel, xSelector, ylabel, ySelector ]
+    div [] [ xlabel, xSelector, ylabel, ySelector ]
 
 starChartView : Sight -> Stars -> Html msg
 starChartView sight { header, data } =
@@ -526,11 +561,7 @@ starChartView sight { header, data } =
       , HAttr.width sight.width
       , HAttr.height 40
       ]
-      [ h2 "Table", tbl ]
-
-h2 : String -> Html msg
-h2 str =
-  Html.h2 [] [ Html.text str ]
+      [ tbl ]
 
 
 

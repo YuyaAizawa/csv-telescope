@@ -28,3 +28,28 @@ html, body {
 #star-chart th, td {
   width: 100px;
 }
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.tabs-item {
+  display: block;
+  padding: .5rem 1rem;
+  border-top-left-radius: .25rem;
+  border-top-right-radius: .25rem;
+  border: 1px solid #eee;
+}
+
+.tabs-item.active {
+  background-color: #eee;
+}
+
+.tab-content {
+  background-color: #eee;
+  padding: .5rem 1rem;
+}
