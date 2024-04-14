@@ -142,7 +142,7 @@ update msg model =
         { model | sight = sight_ }
 
     StarPointed idx ->
-      { model | pointedIdx = idx }
+      { model | pointedIdx = idx, tab = TabSelected }
 
     XAxisSelected idx ->
       let
@@ -162,7 +162,13 @@ update msg model =
       { model | source = source }
 
     ParseRequested ->
-      { model | stars = parseCsv model.source }
+      let
+        stars = parseCsv model.source
+      in
+        { model
+        | stars = stars
+        , tab = if List.isEmpty stars.header then TabCsv else TabTable
+        }
 
     TabChanged tab ->
       { model | tab = tab }
@@ -470,21 +476,11 @@ starDetailView { header, data } maybeIdx =
         Nothing -> Html.text "no data"
         Just star ->
           let
-            hd =
-              header
-                |> List.map (Html.text >> List.singleton >> th [])
-                |> tr []
-                |> List.singleton
-                |> thead []
-
-            bd =
-              star
-                |> List.map (\e -> td [] [ Html.text e ])
-                |> tr []
-                |> List.singleton
-                |> tbody []
+            tr_ h d =
+              tr [] [ th [] [ text h ], td [] [ text d ] ]
           in
-            table [] [ hd, bd ]
+            List.map2 tr_ header star
+              |> table []
   in
     div
       [ id "star-selected" ]
